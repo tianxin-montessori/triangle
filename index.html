@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>三角形藏著什麼秘密？</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Huninn&display=swap');
+        @font-face {
+            font-family: 'jf-openhuninn';
+            src: url('https://cdn.jsdelivr.net/gh/justfont/open-huninn-font@v2.1/font/jf-openhuninn-2.1.woff2') format('woff2');
+            font-display: swap;
+        }
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body {
+            touch-action:none; -webkit-touch-callout:none;
+            overflow:hidden; background-color:#d8ebef; margin:0;
+            font-family:'jf-openhuninn','Huninn',sans-serif;
+            color:#4aabc4; letter-spacing:.05em;
+        }
+        svg { user-select:none; -webkit-user-select:none; }
+
+        .draggable { cursor:grab; transition:filter .2s; filter:drop-shadow(0 0 2px rgba(0,0,0,.4)); }
+        .draggable:active,.draggable.dragging { cursor:grabbing; filter:drop-shadow(3px 10px 15px rgba(0,0,0,.5))!important; }
+        .animating { transition:transform .2s ease-out,filter .2s; }
+
+        @keyframes popIn    { 0%{transform:scale(.5);opacity:0} 100%{transform:scale(1);opacity:1} }
+        @keyframes fadeUp   { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes badgePop { 0%{transform:scale(.6);opacity:0} 70%{transform:scale(1.1)} 100%{transform:scale(1);opacity:1} }
+        @keyframes equivIn  { 0%{opacity:0;transform:scale(.92)} 100%{opacity:1;transform:scale(1)} }
+        @keyframes arcIn    { from{opacity:0} to{opacity:1} }
+        @keyframes labelGlow { 0%,100%{fill:#4a3000} 40%{fill:#fe8081} }
+        .label-glow { animation:labelGlow 1.1s ease-in-out 2; }
+        @keyframes glowPulse{ 0%,100%{opacity:.45} 50%{opacity:1} }
+        @keyframes shake    { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-5px)} 50%{transform:translateX(5px)} 75%{transform:translateX(-3px)} 90%{transform:translateX(3px)} }
+        @keyframes lineGlow { 0%,100%{opacity:.6;filter:none} 50%{opacity:1;filter:drop-shadow(0 0 9px #ffd25d)} }
+        @keyframes celebIn  { 0%{opacity:0;transform:scale(.85) translateY(20px)} 100%{opacity:1;transform:scale(1) translateY(0)} }
+        .glow-blink { animation: lineGlow 1.4s ease-in-out infinite; }
+        .fcard-anim { opacity:0; transition:opacity .5s ease; }
+        .fcard-anim.visible { opacity:1; }
+        @keyframes emphAnnot { 0%{transform:scale(1);color:#4b5563} 45%{transform:scale(1.22);color:#4aabc4} 100%{transform:scale(1.08);color:#4aabc4} }
+        .annot-emph { animation:emphAnnot .75s ease forwards; }
+
+        /* ── 雙排進度條小步驟標籤 ── */
+        .ss-lbl {
+            font-family:'jf-openhuninn','Huninn',sans-serif;
+            font-size: clamp(12px, 1.2vw, 14px);
+            color:rgba(100,130,150,.42); transition:color .35s, font-weight .2s;
+            white-space:nowrap;
+        }
+        .ss-lbl.done    { color:#2d8fa8; }
+        .ss-lbl.current {
+            color:#4aabc4; font-weight:bold;
+            background:rgba(74,171,196,.12);
+            border-radius:10px; padding:2px 7px;
+        }
+        .ss-sep { color:rgba(100,130,150,.28); font-size:10px; padding:0 1px; }
+        .ss-group { transition:opacity .3s; }
+        .ss-group.ss-hidden { opacity:0; pointer-events:none; }
+
+        g.draggable:not(.dragging):not(.animating):hover {
+            filter: drop-shadow(0 6px 16px rgba(0,0,0,.52));
+            transition: filter .18s ease;
+        }
+
+        .pop-in  { animation:popIn .3s cubic-bezier(.175,.885,.32,1.275) forwards; transform-origin:0 0; }
+        .fade-up { animation:fadeUp .35s ease forwards; }
+
+        /* ── 進度條膠囊 ── */
+        .phase-pill {
+            display:inline-flex; align-items:center; gap:4px;
+            padding: clamp(3px,0.5vh,5px) clamp(7px,1vw,11px);
+            border-radius:20px;
+            font-size: clamp(13px, 1.3vw, 15px);
+            letter-spacing:.03em;
+            background:#dff0f4; color:#9abfc9;
+            transition:all .35s; white-space:nowrap; flex-shrink:0;
+        }
+        .phase-pill.done   { background:rgba(74,171,196,.15); color:#4aabc4; cursor:pointer; }
+        .phase-pill:not(.active):hover {
+            background:rgba(74,171,196,.35);
+            transform:scale(1.06);
+            box-shadow:0 2px 10px rgba(74,171,196,.3);
+            cursor:pointer;
+            color:white;
+        }
+        .phase-pill:not(.active)::after { content:''; margin-left:0; opacity:0; transition:opacity .2s,margin .2s; font-size:.85em; }
+        .phase-pill:not(.active):hover::after { content:' ↩'; margin-left:2px; opacity:1; }
+        .phase-pill.active { background:#4aabc4; color:white; }
+        .pill-n { font-size:13px; font-weight:bold; }
+        .pill-inline {
+            display:inline-flex; align-items:center; justify-content:center;
+            width:1.5em; height:1.5em; border-radius:50%;
+            background:rgba(255,255,255,.35); color:inherit;
+            font-size:.85em; font-weight:bold; flex-shrink:0;
+            vertical-align:middle; margin:0 2px;
+        }
+        .phase-conn { flex:1; height:2px; min-width:14px; background:#c8dfe4; transition:background .4s; }
+        .phase-conn.done { background:#4aabc4; }
+
+        /* ── 引導文字 ── */
+        /* ▲ 調整：主問句放大到 17px，行距 1.55 */
+        .q-blue { color:#4aabc4; font-size:clamp(16px,1.6vw,19px); font-weight:bold; line-height:1.55; margin-bottom:6px; }
+        /* ▲ 調整：說明文字行距從 1.4 → 1.6 */
+        .q-gray { color:#4b5563; font-size:clamp(15px,1.4vw,17px); line-height:1.6; margin-bottom:5px; }
+        /* ▲ 新增：標題性問句——框出主題，不需學習者真的回答 */
+        .q-title { color:#9ca3af; font-size:clamp(14px,1.3vw,15px); font-weight:normal; line-height:1.5; margin-bottom:4px; }
+
+        /* ── 發光輪廓 ── */
+        .id-target { animation:glowPulse 2s ease-in-out infinite; }
+        .id-dim    { animation:none!important; opacity:.18; }
+
+        /* ── 引導面板 ── */
+        /* ▲ 調整：背景從純白改為極淡藍綠白 #f5fafb */
+        #guidance-panel {
+            background:#f5fafb; border-radius:16px; padding:12px 18px;
+            box-shadow:0 2px 14px rgba(74,171,196,.13); width:100%; overflow-y:auto;
+        }
+
+        /* ── 選項按鈕 ── */
+        /* ▲ 調整：
+           - 邊框從 #b5d5dc 加深到 #7ab8c5
+           - hover 從實心藍 → 淡藍底（區分懸停 vs 已選）
+           - 文字從 14px → 15px
+        */
+        .choice-btn {
+            border:2px solid #7ab8c5; color:#4aabc4; background:#fff;
+            padding:9px; border-radius:12px; font-family:inherit;
+            font-size:clamp(15px,1.4vw,17px); cursor:pointer; transition:all .2s; text-align:center; width:100%;
+        }
+        /* hover：只是淡底色，不填滿 */
+        .choice-btn:hover:not(:disabled) { background:#eaf5f8; color:#2d8fa8; border-color:#4aabc4; }
+        /* 選中（由 JS 加上 selected class）：才填滿 */
+        .choice-btn.selected { background:#4aabc4; color:#fff; border-color:#4aabc4; }
+        .choice-btn:disabled { opacity:.5; cursor:not-allowed; }
+        .choice-btn.wrong { background:#ffe0e0!important; border-color:#fe8081!important; color:#fe8081!important; animation:shake .4s ease; }
+
+        /* ── 探索 / 公式按鈕 ── */
+        .disc-btn {
+            border:2px solid #4aabc4; color:#4aabc4; background:#fff;
+            padding:6px 15px; border-radius:20px; font-family:inherit;
+            font-size:clamp(14px,1.3vw,16px); cursor:pointer; transition:all .2s; letter-spacing:.05em;
+        }
+        .disc-btn:hover { background:#eaf5f8; }
+        .disc-btn.revealed { background:#ffd25d; border-color:#e5b800; color:#7a5800; pointer-events:none; }
+        .disc-btn.selected { background:#4aabc4; border-color:#4aabc4; color:#fff; pointer-events:none; }
+
+        .fstep {
+            background:#f0f9fb; border-left:4px solid #b5d5dc;
+            border-radius:0 8px 8px 0; padding:7px 14px; margin:4px 0;
+            opacity:0; transform:translateY(6px);
+            transition:opacity .4s ease,transform .4s ease,border-color .3s; font-size:14px;
+        }
+        .fstep.visible { opacity:1; transform:translateY(0); border-left-color:#4aabc4; }
+        .fstep.red { background:#fff5f5; }
+        .fstep.visible.red { border-left-color:#fe8081; }
+
+        /* ── 等值方框 ── */
+        #equiv-box {
+            background:linear-gradient(135deg,rgba(74,171,196,.08),rgba(255,210,93,.16));
+            border:2px solid rgba(255,210,93,.75); border-radius:16px;
+            padding:12px 20px; text-align:center;
+            animation:equivIn .55s cubic-bezier(.175,.885,.32,1.275) forwards;
+        }
+
+        /* ── 主按鈕 ── */
+        .btn-next {
+            background:#4aabc4; color:#fff; border:none;
+            padding:9px 26px; border-radius:12px; font-size:clamp(13px,1.2vw,15px); font-weight:bold;
+            font-family:inherit; cursor:pointer; letter-spacing:.08em;
+            box-shadow:0 3px 12px rgba(74,171,196,.35); transition:all .2s;
+        }
+        .btn-next:hover  { background:#3a9ab3; transform:translateY(-1px); }
+        .btn-next:active { transform:scale(.97); }
+        .btn-back {
+            background:transparent; color:#9ca3af;
+            border:2px solid #d1d5db; padding:8px 16px; border-radius:10px;
+            font-family:inherit; font-size:clamp(13px,1.2vw,15px); cursor:pointer; transition:all .2s;
+        }
+        .btn-back:hover { border-color:#4aabc4; color:#4aabc4; }
+
+        /* ── 徽章 ── */
+        /* ▲ 調整：文字顏色從 #7a5800 → #5a3e00（對比度提升）；字體 13px → 14px */
+        .badge {
+            display:inline-flex; align-items:center; gap:4px;
+            background:#ffd25d; color:#5a3e00; border-radius:20px;
+            padding:5px 14px; font-size:clamp(13px,1.2vw,15px);
+            animation:badgePop .45s cubic-bezier(.175,.885,.32,1.275) forwards;
+        }
+        .badge-teal {
+            display:inline-flex; align-items:center; gap:4px;
+            background:rgba(74,171,196,.12); color:#3a8fa8;
+            border:1.5px solid rgba(74,171,196,.3); border-radius:20px;
+            padding:5px 14px; font-size:clamp(13px,1.2vw,15px);
+            animation:badgePop .45s cubic-bezier(.175,.885,.32,1.275) forwards;
+        }
+
+        /* ── 操作提示面板 ── */
+        #hint-panel {
+            display:none;
+            flex-direction:column;
+            width: 172px;
+            flex-shrink:0; height:100%; overflow-y:visible;
+            padding:10px 14px; box-sizing:border-box;
+            background:#f5fafb; border-radius:14px;
+            box-shadow:0 2px 14px rgba(74,171,196,.13);
+        }
+        #hint-panel .hint-title {
+            color:#4aabc4; font-size:14px; font-weight:bold;
+            margin:0 0 7px; white-space:nowrap;
+        }
+        #hint-panel .hint-row {
+            display:flex; align-items:flex-start; gap:6px;
+            color:#4b5563; font-size:14px; line-height:1.5;
+            margin-bottom:5px; white-space:normal;
+        }
+        #hint-panel .hint-dot {
+            flex-shrink:0; width:6px; height:6px;
+            border-radius:50%; background:#4aabc4;
+            margin-top:6px;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col items-center justify-center">
+
+<div id="app" class="w-full max-w-6xl px-3 md:px-5 flex flex-col items-center h-full"
+     style="max-height:100dvh; padding-top:clamp(6px,1.2vh,12px); padding-bottom:clamp(6px,1.2vh,12px); gap:clamp(4px,0.8vh,8px);">
+
+    <!-- ① 標題 + 進度 -->
+    <div class="w-full flex-shrink-0">
+        <h1 class="font-bold text-center mb-2"
+            style="font-size:clamp(20px,2.5vw,30px); text-shadow:1px 1px 2px rgba(0,0,0,.05);">
+            從操作到推理：發現三角形的面積公式
+        </h1>
+
+        <div class="flex justify-center">
+          <div id="progress-row" style="
+            display:grid;
+            grid-template-columns:auto 40px auto 40px auto;
+            grid-template-rows:auto auto;
+            align-items:center;
+            row-gap:5px; column-gap:0;">
+
+            <div class="phase-pill active" id="pill-1" onclick="jumpToPhase(1)" style="grid-column:1;grid-row:1;">
+                <span class="pill-n">①</span><span>感官探索</span>
+            </div>
+            <div class="phase-conn" id="conn-1" style="grid-column:2;grid-row:1;"></div>
+            <div class="phase-pill" id="pill-2" onclick="jumpToPhase(2)" style="grid-column:3;grid-row:1;">
+                <span class="pill-n">②</span><span>推理</span>
+            </div>
+            <div class="phase-conn" id="conn-2" style="grid-column:4;grid-row:1;"></div>
+            <div class="phase-pill" id="pill-3" onclick="jumpToPhase(3)" style="grid-column:5;grid-row:1;">
+                <span class="pill-n">③</span><span>面積公式</span>
+            </div>
+
+            <div id="ss-group-1" class="ss-group" style="grid-column:1;grid-row:2;display:flex;align-items:center;justify-content:center;gap:3px;">
+                <span class="ss-lbl" id="ss1a">形狀的名字</span>
+                <span class="ss-sep">·</span>
+                <span class="ss-lbl" id="ss1b">它們的關係</span>
+                <span class="ss-sep">·</span>
+                <span class="ss-lbl" id="ss1c">關係的名字</span>
+            </div>
+            <div style="grid-column:2;grid-row:2;"></div>
+            <div id="ss-group-2" class="ss-group ss-hidden" style="grid-column:3;grid-row:2;display:flex;align-items:center;justify-content:center;gap:3px;">
+                <span class="ss-lbl" id="ss2a">等值的原因</span>
+                <span class="ss-sep">·</span>
+                <span class="ss-lbl" id="ss2b">底和高的比較</span>
+                <span class="ss-sep">·</span>
+                <span class="ss-lbl" id="ss2c">等值的條件</span>
+            </div>
+            <div style="grid-column:4;grid-row:2;"></div>
+            <div id="ss-group-3" class="ss-group ss-hidden" style="grid-column:5;grid-row:2;display:flex;align-items:center;justify-content:center;gap:3px;">
+                <span class="ss-lbl" id="ss3a">回顧等值條件</span>
+                <span class="ss-sep">·</span>
+                <span class="ss-lbl" id="ss3b">以已知推未知</span>
+                <span class="ss-sep">·</span>
+                <span class="ss-lbl" id="ss3c">面積公式誕生</span>
+            </div>
+
+            <div style="display:none">
+                <span id="psd1"></span><span id="psd2"></span><span id="psd3"></span><span id="psd-lbl"></span>
+                <span id="p2sd1"></span><span id="p2sd2"></span><span id="p2sd-lbl"></span>
+                <span id="p3sd1"></span><span id="p3sd2"></span><span id="p3sd3"></span><span id="p3sd-lbl"></span>
+            </div>
+          </div>
+        </div>
+    </div>
+
+    <!-- ② 畫布 + ③ 引導面板：包在共同容器內，完成畫面可同時覆蓋兩者 -->
+    <div id="canvas-and-guidance-wrap" class="w-full flex-grow flex flex-col" style="min-height:0; position:relative; gap:clamp(4px,0.8vh,8px);">
+    <div class="relative w-full flex-grow bg-[#7cb359] rounded-xl shadow-xl overflow-hidden flex items-center justify-center"
+         style="min-height:0;">
+        <svg id="canvas" viewBox="0 0 1450 800" class="w-full h-full max-h-full">
+            <defs>
+                <filter id="plate-3d" x="-10%" y="-10%" width="120%" height="120%">
+                    <feGaussianBlur stdDeviation="1.2" in="SourceAlpha" result="ba"/>
+                    <feComposite operator="out" in="SourceAlpha" in2="ba" result="em"/>
+                    <feFlood flood-color="#000" flood-opacity="0.25" result="dc"/>
+                    <feComposite operator="in" in="dc" in2="em" result="de"/>
+                    <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="de"/></feMerge>
+                </filter>
+                <filter id="glow-w" x="-55%" y="-55%" width="210%" height="210%">
+                    <feGaussianBlur stdDeviation="9" in="SourceGraphic" result="blur"/>
+                    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <marker id="aw-e" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="rgba(255,255,255,.85)"/></marker>
+                <marker id="aw-s" markerWidth="8" markerHeight="6" refX="1" refY="3" orient="auto-start-reverse"><polygon points="0 0,8 3,0 6" fill="rgba(255,255,255,.85)"/></marker>
+                <marker id="ay-e" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#ffd25d"/></marker>
+                <marker id="ay-s" markerWidth="8" markerHeight="6" refX="1" refY="3" orient="auto-start-reverse"><polygon points="0 0,8 3,0 6" fill="#ffd25d"/></marker>
+                <filter id="card-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.15" flood-color="#8b7355"/>
+                </filter>
+            </defs>
+
+            <g id="static-layer">
+                <g fill="#fff" stroke="#cbd5e1" stroke-width="2" stroke-linejoin="round">
+                    <polygon points="400,200 600,600 200,600"/>
+                    <rect x="800" y="400" width="400" height="200"/>
+                </g>
+                <g id="sv-measure" style="display:none">
+                    <line x1="400" y1="208" x2="400" y2="592" stroke="rgba(255,255,255,.35)" stroke-width="1.5" stroke-dasharray="7,4"/>
+                    <line x1="208" y1="632" x2="592" y2="632" stroke="rgba(255,255,255,.82)" stroke-width="2" marker-start="url(#aw-s)" marker-end="url(#aw-e)"/>
+                    <text x="400" y="668" text-anchor="middle" fill="rgba(255,255,255,.9)" font-family="Georgia,serif" font-style="italic" font-size="32" font-weight="bold">b</text>
+                    <line x1="148" y1="208" x2="148" y2="592" stroke="rgba(255,255,255,.82)" stroke-width="2" marker-start="url(#aw-s)" marker-end="url(#aw-e)"/>
+                    <text x="108" y="408" text-anchor="middle" fill="rgba(255,255,255,.9)" font-family="Georgia,serif" font-style="italic" font-size="32" font-weight="bold">h</text>
+                    <line x1="808" y1="632" x2="1192" y2="632" stroke="rgba(255,255,255,.82)" stroke-width="2" marker-start="url(#aw-s)" marker-end="url(#aw-e)"/>
+                    <text x="1000" y="668" text-anchor="middle" fill="rgba(255,255,255,.9)" font-family="Georgia,serif" font-style="italic" font-size="32" font-weight="bold">b</text>
+                    <line x1="1244" y1="408" x2="1244" y2="592" stroke="#ffd25d" stroke-width="2.5" marker-start="url(#ay-s)" marker-end="url(#ay-e)"/>
+                    <text x="1296" y="508" text-anchor="middle" fill="#ffd25d" font-family="Georgia,serif" font-style="italic" font-size="26" font-weight="bold">h/2</text>
+                </g>
+                <g id="sv-height-hl" style="display:none">
+                    <rect x="644" y="200" width="26" height="400" fill="rgba(255,255,255,.22)" rx="4"/>
+                    <text x="657" y="188" text-anchor="middle" fill="rgba(255,255,255,.82)" font-family="Georgia,serif" font-style="italic" font-size="20">h</text>
+                    <rect x="680" y="400" width="26" height="200" fill="rgba(255,210,93,.45)" rx="4"/>
+                    <text x="693" y="388" text-anchor="middle" fill="#ffd25d" font-family="Georgia,serif" font-style="italic" font-size="20">h/2</text>
+                    <text x="720" y="306" fill="rgba(255,255,255,.7)" font-family="jf-openhuninn, Huninn, sans-serif" font-size="17">← 兩倍</text>
+                </g>
+                <g id="sv-name-height" style="display:none">
+                    <line x1="400" y1="210" x2="400" y2="597" stroke="#ffd25d" stroke-width="6" stroke-dasharray="14,7" opacity=".85"/>
+                    <text x="355" y="415" text-anchor="middle" fill="#ffd25d" font-family="jf-openhuninn, Huninn, sans-serif" font-size="30" font-weight="bold">高</text>
+                </g>
+                <rect id="sv-snap-glow" x="797" y="397" width="406" height="206"
+                      fill="none" stroke="#ffd25d" stroke-width="7" rx="5"
+                      opacity="0" style="pointer-events:none;"/>
+                <g id="sv-rect-labels" style="display:none">
+                    <rect x="946" y="612" width="108" height="54" rx="6" fill="white" stroke="none" filter="url(#card-shadow)"/>
+                    <text x="1000" y="655" text-anchor="middle" fill="#4a3000" font-family="Georgia,serif" font-style="italic" font-size="40" font-weight="bold">b</text>
+                </g>
+                <g id="sv-formula-table" style="display:none">
+                    <rect x="40" y="642" width="1380" height="138" rx="10" fill="rgba(210,188,148,.16)" stroke="rgba(180,160,115,.28)" stroke-width="1.5"/>
+                    <text x="378" y="720" text-anchor="middle" fill="rgba(180,160,100,.7)" font-size="28">→</text>
+                    <text x="718" y="720" text-anchor="middle" fill="rgba(180,160,100,.7)" font-size="28">→</text>
+                    <text x="1058" y="720" text-anchor="middle" fill="rgba(180,160,100,.7)" font-size="28">→</text>
+                </g>
+                <g id="sv-f0" class="fcard-anim" style="display:none">
+                    <rect x="55" y="656" width="298" height="108" rx="7" fill="#fff9f0" stroke="#d4c5a0" stroke-width="1.5" filter="url(#card-shadow)"/>
+                    <text x="204" y="685" text-anchor="middle" fill="#9ca3af" font-family="jf-openhuninn, Huninn, sans-serif" font-size="14">長方形面積</text>
+                    <text x="204" y="734" text-anchor="middle" fill="#4a3000" font-family="Georgia,serif" font-style="italic" font-size="32" font-weight="bold">A = b × h</text>
+                </g>
+                <g id="sv-f1" class="fcard-anim" style="display:none">
+                    <rect x="395" y="656" width="298" height="108" rx="7" fill="#fff9f0" stroke="#d4c5a0" stroke-width="1.5" filter="url(#card-shadow)"/>
+                    <text x="544" y="685" text-anchor="middle" fill="#9ca3af" font-family="jf-openhuninn, Huninn, sans-serif" font-size="14">你剛才發現</text>
+                    <text x="544" y="728" text-anchor="middle" fill="#4aabc4" font-family="Georgia,serif" font-style="italic" font-size="22" font-weight="bold">h = 三角形 h ÷ 2</text>
+                </g>
+                <g id="sv-f2" class="fcard-anim" style="display:none">
+                    <rect x="735" y="656" width="298" height="108" rx="7" fill="#fff9f0" stroke="#d4c5a0" stroke-width="1.5" filter="url(#card-shadow)"/>
+                    <text x="884" y="685" text-anchor="middle" fill="#9ca3af" font-family="jf-openhuninn, Huninn, sans-serif" font-size="14">代入</text>
+                    <text x="884" y="734" text-anchor="middle" fill="#4a3000" font-family="Georgia,serif" font-style="italic" font-size="27" font-weight="bold">A = b × (h÷2)</text>
+                </g>
+                <g id="sv-f3" class="fcard-anim" style="display:none">
+                    <rect x="1075" y="648" width="316" height="122" rx="8" fill="#fff0f0" stroke="#fe8081" stroke-width="2.5" filter="url(#card-shadow)"/>
+                    <text x="1233" y="680" text-anchor="middle" fill="#fe8081" font-family="jf-openhuninn, Huninn, sans-serif" font-size="14">三角形面積</text>
+                    <text x="1233" y="740" text-anchor="middle" fill="#e64a38" font-family="Georgia,serif" font-style="italic" font-size="36" font-weight="bold">A = bh ÷ 2</text>
+                </g>
+                <g id="sv-check" style="display:none">
+                    <circle cx="1000" cy="270" r="46" fill="#ffd25d" opacity=".95"/>
+                    <polyline points="978,270 997,291 1026,250" stroke="#fff" stroke-width="6.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </g>
+            </g>
+
+            <g id="pieces-layer"></g>
+
+            <g id="ui-layer">
+                <!-- ②-2 指認底：移至 ui-layer 並加閃爍 -->
+                <g id="sv-name-base" style="display:none">
+                    <line class="glow-blink" x1="200" y1="600" x2="600" y2="600" stroke="#ffd25d" stroke-width="7"/>
+                    <text x="400" y="640" text-anchor="middle" fill="#ffd25d" font-family="jf-openhuninn, Huninn, sans-serif" font-size="30" font-weight="bold">底</text>
+                </g>
+                <!-- ②-2 黃線：移至 ui-layer 確保疊在嵌板之上 -->
+                <g id="sv-base-hl" style="display:none">
+                    <line class="glow-blink" x1="200" y1="600" x2="600"  y2="600" stroke="#ffd25d" stroke-width="9"/>
+                    <line class="glow-blink" x1="800" y1="600" x2="1200" y2="600" stroke="#ffd25d" stroke-width="9"/>
+                </g>
+                <g id="sv-p2-height" style="display:none">
+                    <line x1="400" y1="208" x2="400" y2="600" stroke="#ffd25d" stroke-width="8"/>
+                </g>
+                <g id="sv-p2-hcompare" style="display:none">
+                    <line class="glow-blink" x1="800" y1="400" x2="800" y2="600" stroke="#ffd25d" stroke-width="8"/>
+                </g>
+                <!-- ③-2 專用：兩個形狀的底線（同時顯示），置於 ui-layer 確保疊在嵌板之上 -->
+                <g id="sv-p3-base" style="display:none">
+                    <line id="sv-p3-base-line1" x1="200" y1="600" x2="600"  y2="600" stroke="#ffd25d" stroke-width="9"/>
+                    <line id="sv-p3-base-line2" x1="800" y1="600" x2="1200" y2="600" stroke="#ffd25d" stroke-width="9"/>
+                    <text x="400" y="650" text-anchor="middle" fill="#4a3000" font-family="Georgia,serif" font-style="italic" font-size="40" font-weight="bold" style="paint-order:stroke;stroke:#fff;stroke-width:8px;stroke-linejoin:round;">b</text>
+                    <text x="1000" y="650" text-anchor="middle" fill="#4a3000" font-family="Georgia,serif" font-style="italic" font-size="40" font-weight="bold" style="paint-order:stroke;stroke:#fff;stroke-width:8px;stroke-linejoin:round;">b</text>
+                </g>
+                <!-- ③-2 專用：長方形的寬（線條粗細對齊三角形高線，精確貼齊長方形左側邊緣） -->
+                <g id="sv-p3-width" style="display:none">
+                    <line id="sv-p3-width-line" x1="800" y1="400" x2="800" y2="600" stroke="#ffd25d" stroke-width="8"/>
+                    <text x="745" y="495" text-anchor="middle" fill="#4a3000" font-family="jf-openhuninn, Huninn, sans-serif" font-size="36" font-weight="bold" style="paint-order:stroke;stroke:#fff;stroke-width:8px;stroke-linejoin:round;"><tspan font-family="Georgia,serif" font-style="italic">h</tspan>的一半</text>
+                    <!-- 節奏5才顯示的 = h/2 分數標籤 -->
+                    <g id="sv-p3-width-frac" style="display:none">
+                        <text x="745" y="530" text-anchor="middle" fill="#4a3000" font-family="jf-openhuninn, Huninn, sans-serif" font-size="28" style="paint-order:stroke;stroke:#fff;stroke-width:6px;">＝</text>
+                        <text x="768" y="528" text-anchor="middle" fill="#4a3000" font-family="Georgia,serif" font-style="italic" font-size="28" font-weight="bold" style="paint-order:stroke;stroke:#fff;stroke-width:6px;">h</text>
+                        <line x1="755" y1="533" x2="783" y2="533" stroke="#4a3000" stroke-width="2"/>
+                        <text x="768" y="552" text-anchor="middle" fill="#4a3000" font-family="Georgia,serif" font-style="italic" font-size="24" font-weight="bold" style="paint-order:stroke;stroke:#fff;stroke-width:6px;">2</text>
+                    </g>
+                </g>
+                <g id="sv-identify" style="display:none">
+                    <polygon id="sv-tri-glow" class="id-target"
+                             points="400,200 600,600 200,600"
+                             fill="rgba(244,183,108,.15)"
+                             stroke="#f4b76c" stroke-width="7"
+                             filter="url(#glow-w)" style="pointer-events:none;"/>
+                    <rect id="sv-rect-glow" class="id-target"
+                          x="797" y="397" width="406" height="206"
+                          fill="rgba(244,183,108,.2)"
+                          stroke="#f4b76c" stroke-width="7"
+                          filter="url(#glow-w)" style="pointer-events:none;"/>
+                    <g id="sv-tri-name" style="display:none">
+                        <rect x="304" y="346" width="192" height="44" rx="14" fill="#ffd25d"/>
+                        <text x="400" y="377" text-anchor="middle" fill="#7a5800" font-family="jf-openhuninn, Huninn, sans-serif" font-size="24" font-weight="bold">三角形 ✓</text>
+                    </g>
+                    <g id="sv-rect-name" style="display:none">
+                        <rect x="848" y="476" width="304" height="44" rx="14" fill="#ffd25d"/>
+                        <text x="1000" y="507" text-anchor="middle" fill="#7a5800" font-family="jf-openhuninn, Huninn, sans-serif" font-size="24" font-weight="bold">長方形 ✓</text>
+                    </g>
+                </g>
+
+                <g id="sv-equiv" style="display:none">
+                    <!-- 向上弧線：兩端從兩個形狀頂部附近出發，拱起跨越 -->
+                    <path id="sv-equiv-arc"
+                          d="M 500,330 Q 725,60 1000,340"
+                          fill="none" stroke="#ffd25d" stroke-width="4"
+                          stroke-linecap="round" opacity="0"
+                          style="transition:opacity .5s ease;"/>
+                    <!-- 等值兩字：弧線頂點附近 -->
+                    <g id="sv-equiv-label" opacity="0" style="transition:opacity .5s ease .3s;">
+                        <rect x="665" y="58" width="120" height="58" rx="14" fill="#ffd25d"/>
+                        <text x="725" y="101" text-anchor="middle"
+                              fill="#5a3e00" font-family="jf-openhuninn, Huninn, sans-serif"
+                              font-size="38" font-weight="bold">等值</text>
+                    </g>
+                </g>
+
+                <g id="rotate-ui-container" style="display:none" class="cursor-pointer">
+                    <g id="rotate-ui-offset">
+                        <g id="rotate-ui-anim">
+                            <circle cx="0" cy="0" r="45" fill="transparent"/>
+                            <circle cx="0" cy="0" r="24" fill="rgba(249,115,22,.75)" stroke="#fff" stroke-width="2" style="filter:drop-shadow(0 3px 5px rgba(0,0,0,.4))"/>
+                            <path d="M -2,-12 A 12,12 0 1,1 -12,-2" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+                            <polygon points="-12,-6 -17,2 -7,2" fill="#fff"/>
+                        </g>
+                    </g>
+                </g>
+
+                <g id="sv-tri-labels" style="display:none">
+                    <line id="sv-label-h-line" style="display:none;opacity:0"
+                          x1="400" y1="208" x2="400" y2="600" stroke="#ffd25d" stroke-width="6"/>
+                    <line id="sv-label-b-line" style="display:none;opacity:0"
+                          x1="200" y1="600" x2="600" y2="600" stroke="#ffd25d" stroke-width="6"/>
+                    <text id="sv-tri-h-label" x="375" y="400" text-anchor="middle"
+                          fill="#4a3000" font-family="Georgia,serif" font-style="italic"
+                          font-size="40" font-weight="bold"
+                          style="opacity:0;transition:opacity .5s ease,fill .3s ease;paint-order:stroke;stroke:#fff;stroke-width:8px;stroke-linejoin:round;">h</text>
+                    <text id="sv-tri-b-label" x="400" y="648" text-anchor="middle"
+                          fill="#4a3000" font-family="Georgia,serif" font-style="italic"
+                          font-size="40" font-weight="bold"
+                          style="opacity:0;transition:opacity .5s ease,fill .3s ease;paint-order:stroke;stroke:#fff;stroke-width:8px;stroke-linejoin:round;">b</text>
+                </g>
+            </g>
+        </svg>
+
+        <!-- ▲ 新增：完成畫面（浮層，覆蓋在畫布上） -->
+    </div>
+
+    <!-- ③ 引導面板 + 操作提示 -->
+    <div class="flex-shrink-0 w-full" style="display:flex; gap:10px; align-items:stretch; height:clamp(160px,24vh,220px); overflow:hidden;">
+        <div id="guidance-panel" style="flex:1; min-width:0; overflow-y:auto;"></div>
+        <div id="hint-panel">
+            <p class="hint-title">💡 如何操作嵌板</p>
+            <div class="hint-row"><span class="hint-dot"></span><span>按住可移動</span></div>
+            <div class="hint-row"><span class="hint-dot"></span><span>點擊一下旋轉 90°</span></div>
+            <div class="hint-row"><span class="hint-dot"></span><span>長按後畫圈可自由旋轉</span></div>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- ④ 按鈕 -->
+    <div class="flex-shrink-0 flex gap-2 items-center">
+        <button id="btn-back"  class="btn-back"  style="display:none" onclick="goBack()">← 上一步</button>
+        <button id="btn-next"  class="btn-next"  style="display:none" onclick="doNext()"></button>
+    </div>
+</div>
+
+<script>
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+let phase=1, p1sub=0, p1triId=false, p1rectId=false, p1done=false;
+let p2namedBase=false, p2namedHeight=false, p2base=false, p2height=false, p2moveStep=0, p2started=false, p2confirmed=false, p2baseShown=false, p2heightConfirmed=false, p3phase=1, p3step=0, p3introDone=false, nextFn=null;
+
+function updateProgress() {
+    [1,2,3].forEach(i=>{
+        const p=document.getElementById(`pill-${i}`);
+        p.className='phase-pill';
+        if(i<phase) p.classList.add('done');
+        else if(i===phase) p.classList.add('active');
+    });
+    document.getElementById('conn-1').className='phase-conn'+(phase>=2?' done':'');
+    document.getElementById('conn-2').className='phase-conn'+(phase>=3?' done':'');
+    const sc=(done,cur)=>done?'ss-lbl done':cur?'ss-lbl current':'ss-lbl';
+    document.getElementById('ss1a').className=sc(phase>1||p1sub>0, phase===1&&p1sub===0);
+    document.getElementById('ss1b').className=sc(phase>1||p1sub>1, phase===1&&p1sub===1);
+    document.getElementById('ss1c').className=sc(phase>1||p1sub>2, phase===1&&p1sub===2);
+    const p2obs = phase===2&&p2confirmed&&!p2heightConfirmed;
+    const p2con = phase===2&&p2heightConfirmed&&!p2base;
+    document.getElementById('ss2a').className=sc(phase>2||(phase===2&&p2confirmed), phase===2&&!p2confirmed);
+    document.getElementById('ss2b').className=sc(phase>2||(phase===2&&p2heightConfirmed), p2obs);
+    document.getElementById('ss2c').className=sc(phase>2||(phase===2&&p2base), p2con);
+
+    // ▲ 只顯示當前大步的小步關鍵字
+    [1,2,3].forEach(i=>{
+        const g=document.getElementById(`ss-group-${i}`);
+        if(g){ g.classList.toggle('ss-hidden', i!==phase); }
+    });
+    document.getElementById('ss3a').className=sc(phase===3&&p3phase>1||phase>3, phase===3&&p3phase===1);
+    document.getElementById('ss3b').className=sc(phase===3&&p3phase>2||phase>3, phase===3&&p3phase===2);
+    document.getElementById('ss3c').className=sc(phase>3, phase===3&&p3phase===3);
+
+    // ▲ 統一保險：「底」標籤只在②「指認底」過渡畫面顯示，其餘畫面一律隱藏
+    const inBaseIntro = (phase===2 && p2confirmed && p2started && !p2baseShown && p2moveStep===0);
+    const _nb = document.getElementById('sv-name-base');
+    if(_nb && !inBaseIntro){ _nb.style.display='none'; }
+}
+
+function showNext(l,fn){const b=document.getElementById('btn-next');b.innerHTML=l;b.style.display='';nextFn=fn;}
+function hideNext(){document.getElementById('btn-next').style.display='none';nextFn=null;}
+function doNext(){if(nextFn)nextFn();}
+function showHint(on){document.getElementById('hint-panel').style.display=on?'flex':'none';}
+function refreshBackBtn(){document.getElementById('btn-back').style.display=(phase===1&&p1sub===0)?'none':'';}
+
+function byId(id){return document.getElementById(id);}
+function setShown(id,on){const el=byId(id); if(el) el.style.display=on?'':'none';}
+function clearVisualState(){
+    [
+        'sv-measure','sv-base-hl','sv-height-hl','sv-check','sv-identify','sv-equiv',
+        'sv-name-base','sv-name-height','sv-p2-height','sv-p2-hcompare',
+        'sv-tri-labels','sv-rect-labels','sv-formula-table',
+        'sv-p3-base','sv-p3-width','sv-p3-width-frac'
+    ].forEach(id=>setShown(id,false));
+    ['sv-label-b-line','sv-label-h-line','sv-p3-base-line1','sv-p3-base-line2','sv-p3-width-line'].forEach(id=>{
+        const el=byId(id);
+        if(!el) return;
+        el.classList.remove('glow-blink');
+        el.style.opacity='';
+        el.style.transition='';
+        if(id==='sv-label-b-line'||id==='sv-label-h-line') {
+            el.style.display='none';
+            el.style.opacity='0';
+        }
+    });
+    ['sv-tri-b-label','sv-tri-h-label'].forEach(id=>{
+        const el=byId(id);
+        if(!el) return;
+        el.classList.remove('label-glow');
+        el.style.opacity='0';
+        el.style.transform='translate(0,0) scale(1)';
+    });
+    ['sv-equiv-arc','sv-equiv-label'].forEach(id=>{
+        const el=byId(id);
+        if(el) el.style.opacity='0';
+    });
+    ['sv-f0','sv-f1','sv-f2','sv-f3'].forEach(id=>{
+        const el=byId(id);
+        if(el){ el.classList.remove('visible'); el.style.display='none'; }
+    });
+}
+function showTriLabelState(){
+    setShown('sv-tri-labels',true);
+    ['sv-label-b-line','sv-label-h-line'].forEach(id=>{
+        const el=byId(id);
+        if(el){ el.classList.remove('glow-blink'); el.style.display='none'; el.style.opacity='0'; }
+    });
+    const h=byId('sv-tri-h-label'); if(h){ h.classList.remove('label-glow'); h.style.opacity='1'; h.style.transform='translate(0,0) scale(1)'; }
+    const b=byId('sv-tri-b-label'); if(b){ b.classList.remove('label-glow'); b.style.opacity='1'; b.style.transform='translate(0,0) scale(1)'; }
+}
+function setP3MeasureState({base=false,width=false,widthFrac=false,baseLine=null,widthLine=null,baseGlow=false,widthGlow=false}={}){
+    const showBaseLine=baseLine===null ? base : baseLine;
+    const showWidthLine=widthLine===null ? width : widthLine;
+    setShown('sv-p3-base',base);
+    setShown('sv-p3-width',width);
+    setShown('sv-p3-width-frac',widthFrac);
+    ['sv-p3-base-line1','sv-p3-base-line2'].forEach(id=>{
+        const el=byId(id);
+        if(!el) return;
+        el.classList.remove('glow-blink');
+        el.style.opacity=showBaseLine ? '1' : '0';
+        if(baseGlow) el.classList.add('glow-blink');
+    });
+    const wl=byId('sv-p3-width-line');
+    if(wl){
+        wl.classList.remove('glow-blink');
+        wl.style.opacity=showWidthLine ? '1' : '0';
+        if(widthGlow) wl.classList.add('glow-blink');
+    }
+}
+
+function setPhase(n){
+    phase=n; p1sub=0; p1triId=false; p1rectId=false; p1done=false;
+    hideNext(); refreshBackBtn();
+    clearVisualState();
+
+    ['sv-measure','sv-base-hl','sv-height-hl','sv-check','sv-identify','sv-equiv','sv-name-base','sv-name-height','sv-p2-height','sv-p2-hcompare','sv-tri-labels','sv-rect-labels','sv-formula-table','sv-p3-base','sv-p3-width','sv-p3-width-frac'].forEach(id=>{
+        document.getElementById(id).style.display='none';
+    });
+    ['sv-f0','sv-f1','sv-f2','sv-f3'].forEach(id=>{
+        const _el=document.getElementById(id); if(_el){_el.classList.remove('visible');_el.style.display='none';}
+    });
+    document.getElementById('sv-tri-name').style.display='none';
+    document.getElementById('sv-rect-name').style.display='none';
+    document.getElementById('sv-tri-glow').classList.remove('id-dim');
+    document.getElementById('sv-rect-glow').classList.remove('id-dim');
+    updateProgress();
+    if(n===1){ showHint(false); initGame(); setDrag(false); document.getElementById('sv-identify').style.display=''; renderIdentifyQuestion(); }
+    if(n===2){ p2namedBase=false; p2namedHeight=false; p2base=false; p2height=false; p2moveStep=0; p2started=false; p2confirmed=false; p2baseShown=false; p2heightConfirmed=false; showHint(false); initGame(); renderGuide2Confirm(); }
+    if(n===3){ p3phase=1; p3step=0; p3introDone=false; showHint(false); initGame(); renderGuide3(); }
+}
+
+function goToP1Sub(n){
+    p1sub=n;
+    clearVisualState();
+    document.getElementById('sv-check').style.display='none';
+    document.getElementById('sv-equiv').style.display='none';
+    if(n===0){
+        p1triId=false; p1rectId=false; p1done=false;
+        document.getElementById('sv-tri-name').style.display='none';
+        document.getElementById('sv-rect-name').style.display='none';
+        document.getElementById('sv-tri-glow').classList.remove('id-dim');
+        document.getElementById('sv-rect-glow').classList.remove('id-dim');
+        document.getElementById('sv-identify').style.display='';
+        showHint(false); setDrag(false); initGame(); hideNext();
+    } else if(n===1){
+        p1done=false;
+        document.getElementById('sv-identify').style.display='none';
+        showHint(true); setDrag(true); initGame(); hideNext();
+    }
+    updateProgress(); refreshBackBtn();
+    if(n===0) renderIdentifyQuestion();
+    else if(n===1) renderGuide1drag();
+}
+
+function goBack(){
+    if(phase===1){if(p1sub===1){goToP1Sub(0);return;}if(p1sub===2){goToP1Sub(1);return;}return;}
+    if(phase===2){
+        if(!p2confirmed){goBackToPhase1Done();return;}
+        if(!p2started){p2confirmed=false;renderGuide2Confirm();return;}
+        if(p2started&&!p2baseShown&&p2moveStep===0){p2started=false;renderGuide2();return;}
+        if(p2baseShown&&p2moveStep===0){p2baseShown=false;startPhase2Observe();return;}
+        if(p2moveStep===1){restoreP2Step0();return;}
+        if(p2moveStep===2){restoreP2Step1Done();return;}
+        if(p2moveStep===3&&p2base){restoreHeightConfirmed();return;}
+        if(p2moveStep===3&&!p2base){restoreP2Step2Done();return;}
+        return;
+    }
+    if(phase===3){
+        if(p3phase===1){goBackToPhase2Done();return;}
+        if(p3phase===2){restoreP3Phase1();return;}
+        if(p3phase===3&&!p3introDone){
+            if(p3introStep>1){renderDerivationStep(p3introStep-1);return;}
+            restoreP3Phase2();return;
+        }
+        if(p3phase===3&&p3introDone){restoreDerivationIntro();return;}
+    }
+}
+
+function restoreP2Step0(){
+    p2started=true; p2baseShown=true; p2moveStep=0; p2base=false; p2height=false; p2heightConfirmed=false;
+    hideNext();
+    clearVisualState();
+    document.getElementById('sv-name-base').style.display='none';
+    movePieceTo('Tri_Left',350,300,0,0); movePieceTo('Tri_Right',450,300,0,0); movePieceTo('Trapezoid',400,500,0,100);
+    updateProgress(); refreshBackBtn();
+    setTimeout(()=>{
+        document.getElementById('guidance-panel').innerHTML=`<div class="fade-up"><p class="q-gray">共三個步驟，每次點按鈕，嵌板會自動移動。</p><button class="disc-btn" id="btn-mv1" style="margin-top:8px;width:100%;text-align:left;" onclick="doMoveStep1()">① 把底部嵌板移到長方形，看底邊 →</button></div>`;
+    },500);
+}
+
+function restoreP2Step1Done(){
+    p2moveStep=1; p2base=false; p2height=false; p2baseShown=true; p2heightConfirmed=false;
+    hideNext();
+    clearVisualState();
+    document.getElementById('sv-name-base').style.display='none';
+    document.getElementById('sv-base-hl').style.display='';
+    movePieceTo('Tri_Left',350,300,0,0); movePieceTo('Tri_Right',450,300,0,0); movePieceTo('Trapezoid',1000,500,0,0);
+    updateProgress(); refreshBackBtn();
+    setTimeout(()=>renderP2Step1Panel(),400);
+}
+function renderP2Step1Panel(){
+    document.getElementById('guidance-panel').innerHTML=`<div class="fade-up"><div style="margin:5px 0 10px;"><span class="badge">✓ 三角形的底和長方形的底邊，一樣長！</span></div><button class="disc-btn" id="btn-mv2" style="width:100%;text-align:left;" onclick="doMoveStep2()">② 來找三角形的高 →</button></div>`;
+}
+
+function restoreP2Step2Done(){
+    p2moveStep=2; p2base=false; p2height=false; p2baseShown=true; p2heightConfirmed=false;
+    hideNext();
+    clearVisualState();
+    document.getElementById('sv-name-base').style.display='none';
+    document.getElementById('sv-p2-height').style.display='';
+    movePieceTo('Tri_Left',350,300,0,0); movePieceTo('Tri_Right',450,500,0,0); movePieceTo('Trapezoid',1000,500,0,0);
+    updateProgress(); refreshBackBtn();
+    setTimeout(()=>renderP2Step2Panel(),400);
+}
+function renderP2Step2Panel(){
+    document.getElementById('guidance-panel').innerHTML=`<div class="fade-up"><p class="q-gray">看到兩塊小嵌板中間的這條垂直線了嗎？</p><p class="q-gray">這條線從三角形頂點一直延伸到底——就是三角形的<span style="color:#fe8081;font-weight:bold;">高</span>！</p><p class="q-blue" style="margin-top:6px;">那三角形的高，和長方形的高，會有什麼關係呢？</p><button class="disc-btn" id="btn-mv3" style="width:100%;text-align:left;margin-top:6px;" onclick="doMoveStep3()">③ 把剩下的嵌板也移到長方形，比較高度 →</button></div>`;
+}
+
+function restoreHeightConfirmed(){
+    p2moveStep=3; p2base=false; p2height=false; p2heightConfirmed=true;
+    hideNext();
+    clearVisualState();
+    document.getElementById('sv-p2-height').style.display='';
+    document.getElementById('sv-p2-hcompare').style.display='';
+    movePieceTo('Tri_Left',850,500,180,0); movePieceTo('Tri_Right',1150,500,180,0); movePieceTo('Trapezoid',1000,500,0,0);
+    updateProgress(); refreshBackBtn();
+    setTimeout(()=>{
+        document.getElementById('guidance-panel').innerHTML=`
+        <div class="fade-up">
+          <p class="q-gray">比比看兩條黃線——左邊是三角形的高，右邊是長方形的高。</p>
+          <div style="margin:5px 0 10px;"><span class="badge">✓ 長方形的高是三角形高的一半！</span></div>
+          <button class="disc-btn" id="btn-equiv-cond" style="width:100%;text-align:left;" onclick="revealEquivCondition()">來看看，這代表了什麼 →</button>
+        </div>`;
+    },400);
+}
+
+function jumpToPhase(n){
+    if(n===phase) return;
+    if(n<phase){ if(n===1)goBackToPhase1Done(); else if(n===2)goBackToPhase2Done(); }
+    else { setPhase(n); }
+}
+
+function goBackToPhase1Done(){
+    phase=1; p1sub=2; p1done=true; p1triId=true; p1rectId=true;
+    clearVisualState();
+    ['sv-measure','sv-base-hl','sv-height-hl','sv-identify','sv-name-base','sv-name-height','sv-p2-height','sv-p2-hcompare','sv-tri-labels','sv-rect-labels','sv-formula-table','sv-p3-base','sv-p3-width','sv-p3-width-frac'].forEach(id=>{ document.getElementById(id).style.display='none'; });
+    ['sv-f0','sv-f1','sv-f2','sv-f3'].forEach(id=>{ const _e=document.getElementById(id);if(_e){_e.classList.remove('visible');_e.style.display='none';} });
+    document.getElementById('sv-tri-name').style.display='none';
+    document.getElementById('sv-rect-name').style.display='none';
+    document.getElementById('sv-tri-glow').classList.remove('id-dim');
+    document.getElementById('sv-rect-glow').classList.remove('id-dim');
+    const ck=document.getElementById('sv-check'); ck.style.display='none';
+    const eq=document.getElementById('sv-equiv'); eq.style.display='';
+    const arc=document.getElementById('sv-equiv-arc'); if(arc) arc.style.opacity='1';
+    const lbl=document.getElementById('sv-equiv-label'); if(lbl) lbl.style.opacity='1';
+    showHint(false); setDrag(false); assembleRect();
+    updateProgress(); refreshBackBtn();
+    renderGuide1equiv();
+}
+
+function goBackToPhase2Done(){
+    phase=2; p2namedBase=true; p2namedHeight=true; p2base=true; p2height=true; p2moveStep=3; p2started=true; p2confirmed=true; p2baseShown=true; p2heightConfirmed=true;
+    clearVisualState();
+    ['sv-check','sv-identify','sv-equiv','sv-name-base','sv-name-height','sv-measure','sv-p2-height','sv-height-hl','sv-tri-labels','sv-rect-labels','sv-formula-table','sv-p3-base','sv-p3-width','sv-p3-width-frac'].forEach(id=>{ document.getElementById(id).style.display='none'; });
+    ['sv-f0','sv-f1','sv-f2','sv-f3'].forEach(id=>{ const _e=document.getElementById(id);if(_e){_e.classList.remove('visible');_e.style.display='none';} });
+    const _hl2=document.getElementById('sv-tri-h-label'); if(_hl2) _hl2.style.opacity='0';
+    const _bl2=document.getElementById('sv-tri-b-label'); if(_bl2) _bl2.style.opacity='0';
+    document.getElementById('sv-base-hl').style.display='';
+    document.getElementById('sv-p2-hcompare').style.display='';
+    showHint(false); assembleRect();
+    updateProgress(); refreshBackBtn();
+    renderGuide2Done();
+}
+
+function renderGuide2Done(){
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up">
+      <p class="q-gray">底相同，高減半——把這兩個發現合在一起：</p>
+      <p class="q-blue" style="line-height:1.6;">當三角形與長方形擁有<span style="color:#fe8081;">相同的底</span>，且長方形的<span style="color:#fe8081;">高</span>是三角形的<span style="color:#fe8081;">一半</span>時，這個三角形就與該長方形<span style="color:#fe8081;">等值</span>。</p>
+    </div>`;
+    showNext('繼續，進入 <span class="pill-inline">③</span> 面積公式 →',()=>setPhase(3));
+}
+function resetPhase(){setPhase(phase);}
+function setDrag(on){document.getElementById('pieces-layer').style.pointerEvents=on?'':'none';}
+
+/* ─── Phase 1A：辨識 ─── */
+function renderIdentifyQuestion(){
+    const askTri=!p1triId;
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up">
+      <p class="q-title">這兩個形狀，你都認識嗎？</p>
+      <p class="q-blue" style="margin-bottom:8px;">${askTri?'先來看<strong>左邊</strong>這個——':'再來看<strong>右邊</strong>這個——'}它是什麼形狀？</p>
+      <div style="display:flex;gap:10px;margin-top:4px;">
+        <button class="choice-btn" onclick="answerShape('${askTri?'三角形':'長方形'}',this)"
+                style="font-size:clamp(14px,1.3vw,17px);padding:12px;">
+          我認得，這是<span style="color:#fe8081;font-weight:bold;">${askTri?'三角形':'長方形'}</span>
+        </button>
+      </div>
+      <div id="g1-feedback" style="min-height:18px;margin-top:6px;font-size:13px;"></div>
+    </div>`;
+    document.getElementById('sv-tri-glow').classList.toggle('id-dim',!askTri);
+    document.getElementById('sv-rect-glow').classList.toggle('id-dim', askTri);
+}
+
+function answerShape(answer,btn){
+    const correctTri =!p1triId  && answer==='三角形';
+    const correctRect= p1triId && !p1rectId && answer==='長方形';
+    if(correctTri||correctRect){
+        btn.classList.add('selected');
+        btn.disabled=true;
+        if(correctTri){
+            p1triId=true;
+            document.getElementById('sv-tri-name').style.display='';
+            document.getElementById('sv-tri-glow').classList.add('id-dim');
+            setTimeout(()=>{
+                document.getElementById('sv-rect-glow').classList.remove('id-dim');
+                renderIdentifyQuestion();
+            },700);
+        } else {
+            p1rectId=true;
+            document.getElementById('sv-rect-name').style.display='';
+            document.getElementById('sv-rect-glow').classList.add('id-dim');
+            setTimeout(()=>goToP1Sub(1),900);
+        }
+    }
+}
+
+/* ─── Phase 1B：拖曳 ─── */
+function renderGuide1drag(){
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up">
+      <p class="q-blue">想一想，這個三角形的嵌板能不能放進長方形裡呢？</p>
+      <p class="q-gray">把三塊嵌板拖到右邊長方形，試試看。</p>
+      <div id="g1-done" style="display:none;margin-top:6px;" class="fade-up">
+        <span class="badge">✓ 三塊嵌板填滿了長方形！</span>
+      </div>
+    </div>`;
+}
+
+/* ─── Phase 1C：等值宣示 ─── */
+function renderGuide1equiv(){
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up">
+      <p class="q-gray" style="margin-bottom:8px;">
+        三塊嵌板放得進長方形——這說明
+        <span style="color:#4aabc4;font-weight:bold;">三角形和長方形是
+        <span style="color:#fe8081;font-size:clamp(16px,1.6vw,20px);letter-spacing:.08em;">等值</span>的</span>。
+      </p>
+    </div>`;
+    showNext('繼續，進入 <span class="pill-inline">②</span> 推理 →',()=>setPhase(2));
+}
+
+function onAssembled(){
+    if(p1done)return; p1done=true; p1sub=2;
+    // 打勾出現（確認嵌板放進去了）
+    const ck=document.getElementById('sv-check');
+    ck.style.display=''; ck.style.animation='badgePop .5s cubic-bezier(.175,.885,.32,1.275) forwards';
+    setTimeout(()=>{const d=document.getElementById('g1-done');if(d)d.style.display='block';},900);
+    updateProgress(); refreshBackBtn();
+    // 「我發現了什麼」按鈕
+    setTimeout(()=>showNext('我發現了什麼 →', ()=>{
+        // 隱藏打勾
+        document.getElementById('sv-check').style.display='none';
+        // 顯示 sv-equiv（弧線 + 等值兩字）
+        const eq=document.getElementById('sv-equiv');
+        eq.style.display='';
+        // 弧線和文字分別淡入
+        const arc=document.getElementById('sv-equiv-arc');
+        const lbl=document.getElementById('sv-equiv-label');
+        if(arc){ arc.style.opacity='1'; }
+        if(lbl){ lbl.style.opacity='1'; }
+        renderGuide1equiv();
+    }),1100);
+}
+
+/* ─── Phase 2 ─── */
+/* ─── Phase 2-1：回顧已知（主動確認等值原因）─── */
+function renderGuide2Confirm(){
+    p2confirmed=false;
+    hideNext();
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up">
+      <p class="q-blue">三角形和長方形為什麼等值？</p>
+      <div style="margin-top:8px;">
+        <button class="choice-btn" onclick="confirmEquivReason(this)" style="font-size:clamp(15px,1.4vw,17px);padding:11px;">
+          我知道！因為三角形的嵌板放得進長方形
+        </button>
+      </div>
+    </div>`;
+    updateProgress(); refreshBackBtn();
+}
+
+function confirmEquivReason(btn){
+    btn.classList.add('selected');
+    btn.disabled=true;
+    p2confirmed=true;
+    updateProgress();
+    setTimeout(()=>{ renderGuide2(); },600);
+}
+
+function renderGuide2(){
+    p2moveStep=0; p2started=false;
+    hideNext();
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up">
+      <p class="q-blue">現在我們已經知道：三角形和長方形等值。</p>
+      <p class="q-gray">接下來，讓動畫帶我們一起觀察，它們之間還藏著哪些關係。</p>
+      <button class="disc-btn" style="margin-top:8px;width:100%;text-align:left;" onclick="startPhase2Observe()">開始觀察 →</button>
+    </div>`;
+    updateProgress(); refreshBackBtn();
+}
+
+function startPhase2Observe(){
+    p2started=true; p2baseShown=false;
+    hideNext();
+    clearVisualState();
+    document.getElementById('sv-name-base').style.display='';
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up">
+      <p class="q-gray">這是三角形的<span style="color:#fe8081;font-weight:bold;">底</span>。</p>
+      <p id="p2-ask-q" class="q-blue" style="opacity:0;transition:opacity .6s;">它跟長方形的底，會有什麼關係呢？</p>
+      <button class="disc-btn" id="btn-ask-next" style="margin-top:8px;width:100%;text-align:left;opacity:0;pointer-events:none;transition:opacity .5s;" onclick="showBaseAndAsk()">移動嵌板，來看看 →</button>
+    </div>`;
+    refreshBackBtn();
+    setTimeout(()=>{ const e=document.getElementById('p2-ask-q'); if(e) e.style.opacity='1'; },1200);
+    setTimeout(()=>{ const b=document.getElementById('btn-ask-next'); if(b){ b.style.opacity='1'; b.style.pointerEvents='auto'; } },2200);
+}
+
+function showBaseAndAsk(){
+    p2baseShown=true;
+    document.getElementById('sv-name-base').style.display='none';
+    hideNext();
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up">
+      <p class="q-gray">共三個步驟，每次點按鈕，嵌板會自動移動。</p>
+      <button class="disc-btn" id="btn-mv1" style="margin-top:8px;width:100%;text-align:left;" onclick="doMoveStep1()">① 把底部嵌板移到長方形，看底邊 →</button>
+    </div>`;
+    refreshBackBtn();
+}
+
+function movePieceTo(id,x,y,rot,delay){
+    setTimeout(()=>{
+        const p=pieces.find(q=>q.id===id); if(!p)return;
+        const el=document.getElementById(id); if(!el)return;
+        el.classList.remove('animating');
+        el.style.transition='transform 0.72s cubic-bezier(0.4,0,0.2,1),filter 0.2s';
+        p.x=x; p.y=y; p.rot=rot;
+        el.setAttribute('transform',`translate(${x},${y}) rotate(${rot})`);
+        setTimeout(()=>{ el.style.transition=''; },800);
+    },delay);
+}
+
+function doMoveStep1(){
+    if(p2moveStep!==0)return; p2moveStep=1; updateProgress();
+    document.getElementById('btn-mv1').classList.add('revealed');
+    document.getElementById('btn-mv1').textContent='① 底部嵌板移動中……';
+    movePieceTo('Trapezoid',1000,500,0,0);
+    setTimeout(()=>{
+        document.getElementById('sv-base-hl').style.display='';
+        document.getElementById('guidance-panel').innerHTML=`
+        <div class="fade-up">
+          <div style="margin:5px 0 10px;"><span class="badge">✓ 三角形的底和長方形的底邊，一樣長！</span></div>
+          <button class="disc-btn" id="btn-mv2" style="width:100%;text-align:left;" onclick="doMoveStep2()">② 來找三角形的高 →</button>
+        </div>`;
+    },1000);
+}
+
+function doMoveStep2(){
+    if(p2moveStep!==1)return; p2moveStep=2;
+    document.getElementById('sv-base-hl').style.display='none';
+    document.getElementById('btn-mv2').classList.add('revealed');
+    document.getElementById('btn-mv2').textContent='② 找高度中……';
+    movePieceTo('Tri_Left',350,300,0,0);
+    movePieceTo('Tri_Right',450,500,0,300);
+    setTimeout(()=>{
+        document.getElementById('sv-p2-height').style.display='';
+        document.getElementById('guidance-panel').innerHTML=`
+        <div class="fade-up">
+          <p class="q-gray">看到兩塊小嵌板中間的這條垂直線了嗎？</p>
+          <p class="q-gray">這條線從三角形頂點一直延伸到底——就是三角形的<span style="color:#fe8081;font-weight:bold;">高</span>！</p>
+          <p class="q-blue" style="margin-top:6px;">那三角形的高，和長方形的高，會有什麼關係呢？</p>
+          <button class="disc-btn" id="btn-mv3" style="width:100%;text-align:left;margin-top:6px;" onclick="doMoveStep3()">③ 把剩下的嵌板也移到長方形，比較高度 →</button>
+        </div>`;
+    },1300);
+}
+
+function doMoveStep3(){
+    if(p2moveStep!==2)return; p2moveStep=3;
+    document.getElementById('btn-mv3').classList.add('revealed');
+    document.getElementById('btn-mv3').textContent='③ 剩下的嵌板移動中……';
+    movePieceTo('Tri_Left',850,500,180,0);
+    movePieceTo('Tri_Right',1150,500,180,300);
+    setTimeout(()=>{
+        document.getElementById('sv-p2-hcompare').style.display='';
+        document.getElementById('guidance-panel').innerHTML=`
+        <div class="fade-up">
+          <p class="q-gray">比比看兩條黃線——左邊是三角形的高，右邊是長方形的高。</p>
+          <div style="margin:5px 0 10px;"><span class="badge">✓ 長方形的高是三角形高的一半！</span></div>
+          <button class="disc-btn" id="btn-equiv-cond" style="width:100%;text-align:left;" onclick="revealEquivCondition()">來看看，這代表了什麼 →</button>
+        </div>`;
+        p2heightConfirmed=true;
+        updateProgress();
+    },1300);
+}
+
+function revealEquivCondition(){
+    p2base=true; p2height=true;
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up">
+      <p class="q-gray">底相同，高減半——把這兩個發現合在一起：</p>
+      <p class="q-blue" style="line-height:1.6;">當三角形與長方形擁有<span style="color:#fe8081;">相同的底</span>，且長方形的<span style="color:#fe8081;">高</span>是三角形的<span style="color:#fe8081;">一半</span>時，這個三角形就與該長方形<span style="color:#fe8081;">等值</span>。</p>
+    </div>`;
+    showNext('繼續，進入 <span class="pill-inline">③</span> 面積公式 →',()=>setPhase(3));
+    updateProgress();
+}
+
+/* ─── Phase 3 ─── */
+function renderGuide3(){
+    p3phase=1; p3step=0;
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up" style="font-size:13px;line-height:1.5;">
+      <p id="rg3p1" class="q-gray" style="margin-bottom:4px;">
+        我們已經知道：當底相同、長方形的高是三角形高的一半，它們<span style="color:#fe8081;">等值，也就是面積相同</span>。
+      </p>
+      <p id="rg3p2" class="q-gray" style="margin-bottom:6px;opacity:0;transition:opacity .6s;">
+        現在，就用這個關係，<span style="color:#4aabc4;font-weight:bold;">來找出三角形的面積公式。</span>
+      </p>
+      <button class="disc-btn" id="btn-label" style="width:100%;text-align:left;opacity:0;pointer-events:none;transition:opacity .5s;" onclick="showLabelsAndContinue()">先標示各個部分：底和高 →</button>
+    </div>`;
+    updateProgress(); refreshBackBtn();
+    setTimeout(()=>{ const e=document.getElementById('rg3p2'); if(e) e.style.opacity='1'; },1000);
+    setTimeout(()=>{ const b=document.getElementById('btn-label'); if(b){ b.style.opacity='1'; b.style.pointerEvents='auto'; } },1800);
+}
+
+function showLabelsAndContinue(){
+    const btn=document.getElementById('btn-label');
+    if(btn){ btn.style.pointerEvents='none'; } // 立即停用按鈕，避免重複點擊，但外觀和文字都先不變
+    showTriLabels();
+    // 延遲到 h 標籤真正出現之後，按鈕才變成完成陳述（外觀+文字同步），避免時序對不上
+    setTimeout(()=>{
+        if(btn){ btn.classList.add('selected'); btn.style.pointerEvents='none'; btn.textContent='三角形的底（b）和高（h），已經標示出來了。✓'; }
+        // 不自動轉場，改為新增一個「繼續」按鈕，由使用者自己決定何時往下走
+        const panel=document.getElementById('guidance-panel');
+        const nextBtn=document.createElement('button');
+        nextBtn.className='disc-btn';
+        nextBtn.style.cssText='margin-top:8px;width:100%;text-align:left;opacity:0;transition:opacity .5s;';
+        nextBtn.textContent='繼續 →';
+        nextBtn.onclick=()=>{ showLabelsContinueStep2(); };
+        panel.appendChild(nextBtn);
+        requestAnimationFrame(()=>{ nextBtn.style.opacity='1'; });
+    },2400);
+}
+
+function showLabelsContinueStep2(){
+    _hideLine('sv-label-b-line');
+    _hideLine('sv-label-h-line');
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up">
+      <p class="q-gray">三角形的底（b）和高（h），都已經標示出來了。</p>
+      <p class="q-blue">接下來，讓我們把這個三角形，轉換成長方形。</p>
+      <button class="disc-btn" style="margin-top:8px;width:100%;text-align:left;" onclick="goToP3Phase2()">把三角形轉換成長方形 →</button>
+    </div>`;
+    refreshBackBtn();
+}
+
+function showTriLabels(){
+    document.getElementById('sv-tri-labels').style.display='';
+    // 底黃線閃爍 → b字 → 高黃線閃爍 → h字
+    setTimeout(()=>{ _flashLine('sv-label-b-line'); },300);
+    setTimeout(()=>{ const b=document.getElementById('sv-tri-b-label'); if(b) b.style.opacity='1'; },700);
+    setTimeout(()=>{ _flashLine('sv-label-h-line'); },1400);
+    setTimeout(()=>{ const h=document.getElementById('sv-tri-h-label'); if(h) h.style.opacity='1'; },1800);
+}
+function _flashLine(id){
+    const el=document.getElementById(id); if(!el)return;
+    el.style.display=''; el.style.opacity='1'; el.classList.add('glow-blink');
+    setTimeout(()=>{ el.classList.remove('glow-blink'); },3200);
+}
+function _hideLine(id){
+    const el=document.getElementById(id); if(!el)return;
+    el.classList.remove('glow-blink');
+    el.style.transition='opacity .6s ease';
+    el.style.opacity='0';
+    setTimeout(()=>{ el.style.display='none'; el.style.transition=''; },600);
+}
+
+function goToP3Phase2(){
+    p3phase=2; updateProgress(); hideNext();
+    clearVisualState();
+    showTriLabelState();
+    movePieceTo('Tri_Left',850,500,180,0);
+    movePieceTo('Trapezoid',1000,500,0,200);
+    movePieceTo('Tri_Right',1150,500,180,400);
+    setTimeout(()=>{
+        document.getElementById('guidance-panel').innerHTML=`
+        <div class="fade-up">
+          <p id="p3p1" class="q-blue">長方形的面積，我們知道怎麼算——<span style="color:#fe8081;">長 × 寬</span>。</p>
+          <p id="p3p2" class="q-gray" style="opacity:0;transition:opacity .6s;">長方形的<span style="color:#4aabc4;font-weight:bold;">長</span>，正好就是三角形的<span style="color:#fe8081;">底（b）</span>。</p>
+          <p id="p3p3" class="q-gray" style="opacity:0;transition:opacity .6s;">長方形的<span style="color:#4aabc4;font-weight:bold;">寬</span>，正好是三角形<span style="color:#fe8081;">高（h）的一半</span>。</p>
+          <p id="p3p4" class="q-gray" style="opacity:0;transition:opacity .6s;">這些，已經足夠讓我們推導出<span style="color:#4aabc4;">三角形的面積公式</span>了。</p>
+          <button class="disc-btn" id="p3-btn" style="width:100%;text-align:left;opacity:0;pointer-events:none;transition:opacity .5s;" onclick="renderDerivationIntro()">開始推導公式 →</button>
+        </div>`;
+        refreshBackBtn();
+        setTimeout(()=>{
+            const e=document.getElementById('p3p2'); if(e) e.style.opacity='1';
+            document.getElementById('sv-p3-base').style.display='';
+        },1400);
+        setTimeout(()=>{
+            const e=document.getElementById('p3p3'); if(e) e.style.opacity='1';
+            document.getElementById('sv-p2-height').style.display='';
+            document.getElementById('sv-p3-width').style.display='';
+        },2800);
+        setTimeout(()=>{ const e=document.getElementById('p3p4'); if(e) e.style.opacity='1'; },4200);
+        setTimeout(()=>{ const b=document.getElementById('p3-btn'); if(b){ b.style.opacity='1'; b.style.pointerEvents='auto'; } },5200);
+    },1400);
+}
+
+let p3introStep=0;
+
+function renderDerivationIntro(){
+    p3phase=3; p3step=0; p3introDone=false; p3introStep=1; updateProgress();
+    clearVisualState();
+    showTriLabelState();
+    // sv-p3-base 和 sv-p3-width 從③-2帶來，保持顯示但線段透明、停止閃爍（文字符號保持可見）
+    document.getElementById('sv-p3-base').style.display='';
+    document.getElementById('sv-p3-width').style.display='';
+    ['sv-p3-base-line1','sv-p3-base-line2','sv-p3-width-line'].forEach(id=>{
+        const e=document.getElementById(id);
+        if(e){ e.classList.remove('glow-blink'); e.style.opacity='0'; }
+    });
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up" style="padding:10px 0 8px;display:flex;flex-direction:column;gap:8px;">
+      <!-- 公式容器：左右各佔50%，等號強制在正中 -->
+      <div style="display:flex;align-items:baseline;width:100%;
+                  font-family:jf-openhuninn,Huninn,sans-serif;font-weight:bold;color:#4a3000;
+                  font-size:clamp(18px,2.2vw,26px);line-height:1.6;">
+        <div style="flex:1;text-align:right;padding-right:4px;">
+          <span id="deriv-label">三角形的面積</span>
+        </div>
+        <span style="flex-shrink:0;"> ＝ </span>
+        <div style="flex:1;text-align:left;padding-left:4px;">
+          <div style="display:flex;flex-direction:column;align-items:flex-start;">
+            <span id="deriv-right" style="transition:opacity .45s ease;display:block;white-space:nowrap;">長方形的面積</span>
+            <div id="deriv-sub-row" style="height:1.4em;opacity:0;transition:opacity .45s ease;">
+              <span id="deriv-sub" style="font-size:clamp(13px,1.4vw,16px);color:#9ca3af;font-weight:normal;line-height:1.3;white-space:nowrap;"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button class="disc-btn" id="deriv-next-btn" style="margin-top:4px;width:100%;text-align:center;" onclick="nextDerivationStep()">繼續 →</button>
+    </div>`;
+    refreshBackBtn();
+}
+
+
+/* 使用者每按一次「繼續」，推進一個節奏。p3introStep 從1開始，對應節奏2~6 */
+function nextDerivationStep(){
+    p3introStep++;
+    const r=document.getElementById('deriv-right');
+    const btn=document.getElementById('deriv-next-btn');
+    const subRow=document.getElementById('deriv-sub-row');
+    const sub=document.getElementById('deriv-sub');
+
+    // 通用：deriv-right 漸出→換內容→漸入
+    function fadeSwap(el, newContent){
+        if(!el) return;
+        el.style.opacity='0';
+        setTimeout(()=>{ el.innerHTML=newContent; el.style.opacity='1'; },300);
+    }
+    // 補充說明換內容（帶漸出漸入）
+    function fadeSubSwap(newContent, delay=400){
+        if(subRow) subRow.style.opacity='0';
+        setTimeout(()=>{
+            if(sub) sub.innerHTML=newContent;
+            if(subRow) subRow.style.opacity='1';
+        }, delay);
+    }
+
+    // 輔助：讓線條亮起閃爍
+    function glow(id){ const e=document.getElementById(id); if(e){ e.style.opacity='1'; e.classList.remove('glow-blink'); void e.offsetWidth; e.classList.add('glow-blink'); } }
+    // 輔助：線條靜態可見
+    function show(id){ const e=document.getElementById(id); if(e){ e.classList.remove('glow-blink'); e.style.opacity='1'; } }
+    // 輔助：線條透明（文字符號仍然顯示）
+    function hide(id){ const e=document.getElementById(id); if(e){ e.classList.remove('glow-blink'); e.style.opacity='0'; } }
+
+    if(p3introStep===2){
+        // 節奏2：長 × 寬，所有線條維持透明，補充「長方形的面積」
+        fadeSwap(r,'長 × 寬');
+        fadeSubSwap('長方形的面積');
+    }
+    else if(p3introStep===3){
+        // 節奏3：b × 寬，底線閃爍，寬線透明，b標籤閃爍呼應
+        glow('sv-p3-base-line1'); glow('sv-p3-base-line2');
+        hide('sv-p3-width-line');
+        const svB=document.getElementById('sv-tri-b-label');
+        if(svB){ svB.classList.remove('label-glow'); void svB.offsetWidth; svB.classList.add('label-glow'); }
+        fadeSwap(r,'<span style="color:#fe8081;font-family:Georgia,serif;font-style:italic;">b</span> × 寬');
+        fadeSubSwap('長，就是 <span style="color:#fe8081;font-family:Georgia,serif;font-style:italic;font-weight:bold;">b</span>（亮起的黃線）');
+    }
+    else if(p3introStep===4){
+        // 節奏4：b × h的一半，底線透明，寬線閃爍
+        hide('sv-p3-base-line1'); hide('sv-p3-base-line2');
+        glow('sv-p3-width-line');
+        fadeSwap(r,'<span style="color:#fe8081;font-family:Georgia,serif;font-style:italic;">b</span> × <span style="color:#fe8081;font-family:jf-openhuninn,Huninn,sans-serif;font-style:normal;"><span style="font-family:Georgia,serif;font-style:italic;">h</span>的一半</span>');
+        fadeSubSwap('寬，是「<span style="font-family:jf-openhuninn,Huninn,sans-serif;"><span style="font-family:Georgia,serif;font-style:italic;color:#4aabc4;">h</span><span style="color:#4aabc4;">的一半</span></span>」（亮起的黃線）');
+    }
+    else if(p3introStep===5){
+        // 節奏5：b × h/2（分數），底線透明，寬線閃爍，不顯示三角形高線
+        // 顯示 h/2 分數標籤
+        hide('sv-p3-base-line1'); hide('sv-p3-base-line2');
+        glow('sv-p3-width-line');
+        document.getElementById('sv-p2-height').style.display='none';
+        document.getElementById('sv-p3-width-frac').style.display='';
+        fadeSwap(r,`<span style="color:#fe8081;font-family:Georgia,serif;font-style:italic;">b</span><span style="color:#fe8081;"> × </span><span style="display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;color:#fe8081;font-family:Georgia,serif;font-style:italic;line-height:1.1;font-size:0.9em;"><span style="border-bottom:2px solid #fe8081;padding:0 2px;"><span style="font-size:1.1em;">h</span></span><span>2</span></span>`);
+        fadeSubSwap('<span style="display:inline-flex;align-items:baseline;padding-left:3.5em;font-family:jf-openhuninn,Huninn,sans-serif;color:#9ca3af;"><span style="font-family:Georgia,serif;font-style:italic;">h</span>的一半</span>');
+        if(btn) btn.textContent='來看看完整的公式 →';
+    }
+    else if(p3introStep>=6){
+        goToP3Phase3();
+    }
+}
+
+function goToP3Phase3(){
+    p3phase=3; p3step=0; p3introDone=true; updateProgress();
+    clearVisualState();
+    ['sv-base-hl','sv-p2-height','sv-p2-hcompare','sv-p3-base','sv-p3-width','sv-p3-width-frac'].forEach(id=>{ document.getElementById(id).style.display='none'; });
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up" style="display:flex;flex-direction:column;align-items:center;padding:4px 0 2px;">
+      <div id="formula-display" style="
+           display:flex;align-items:center;
+           font-family:Georgia,serif;font-style:italic;
+           font-size:clamp(26px,3vw,38px);font-weight:bold;color:#4a3000;
+           column-gap:5px;margin-bottom:4px;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <div style="display:flex;align-items:center;gap:5px;">
+            <div id="f-A"    style="opacity:0;transition:opacity .4s,transform .4s;transform:translateY(10px)">A</div>
+            <div id="f-eq"   style="opacity:0;transition:opacity .4s">＝</div>
+            <div style="display:inline-flex;align-items:center;">
+              <div id="f-bxfrac" style="display:inline-flex;align-items:center;gap:5px;">
+                <span id="f-b">b</span>
+                <span id="f-x" style="opacity:0;transition:opacity .4s;font-size:clamp(18px,2vw,26px);">×</span>
+                <span id="f-frac" style="opacity:0;transition:opacity .4s;display:inline-flex;flex-direction:column;align-items:center;gap:1px;">
+                  <span style="border-bottom:2.5px solid #4a3000;padding:0 3px;font-size:clamp(22px,2.5vw,30px);line-height:1.2">h</span>
+                  <span style="font-size:clamp(18px,2vw,26px);line-height:1.2">2</span>
+                </span>
+              </div>
+            </div>
+          </div>
+          <!-- 標注文字列 -->
+          <div style="display:flex;align-items:center;gap:5px;font-size:clamp(13px,1.3vw,16px);font-style:normal;font-family:jf-openhuninn,Huninn,sans-serif;color:#4b5563;font-weight:normal;">
+            <div id="f-A-lbl"    style="opacity:0;transition:opacity .4s;white-space:nowrap;">三角形的面積</div>
+            <div id="f-eq-lbl"   style="opacity:0;transition:opacity .4s;">等於</div>
+            <div id="f-b-lbl"    style="opacity:0;transition:opacity .4s;white-space:nowrap;">底</div>
+            <div id="f-x-lbl"    style="opacity:0;transition:opacity .4s;">乘以</div>
+            <div id="f-frac-lbl" style="opacity:0;transition:opacity .4s;white-space:nowrap;">高的一半</div>
+          </div>
+        </div>
+      </div>
+      <p id="formula-ending" style="opacity:0;transition:opacity .6s;font-size:clamp(13px,1.2vw,15px);color:#4b5563;text-align:center;margin-top:6px;line-height:1.6;"></p>
+    </div>`;
+    refreshBackBtn();
+
+    // 公式由左到右自動跑出（f-b 隨 f-bxfrac 整組，初始已在 DOM 中，靠 f-x 和 f-frac 的 opacity 控制節奏感）
+    const show=(id,delay,prop)=>{ setTimeout(()=>{ const e=document.getElementById(id); if(e){ e.style.opacity='1'; if(prop) Object.assign(e.style,prop); } },delay); };
+    show('f-A',   100, {transform:'translateY(0)'});
+    show('f-eq',  400);
+    // f-b 已可見（初始 opacity:0 但在容器內），先讓整組 f-bxfrac 出現
+    setTimeout(()=>{ const e=document.getElementById('f-b'); if(e) e.style.opacity='1'; },700);
+    show('f-x',   950);
+    show('f-frac',1150);
+
+    // 標注文字
+    setTimeout(()=>{
+        ['f-A-lbl','f-eq-lbl','f-b-lbl','f-x-lbl','f-frac-lbl'].forEach((id,i)=>{
+            setTimeout(()=>{ const e=document.getElementById(id); if(e) e.style.opacity='1'; },i*80);
+        });
+    },1800);
+
+    // 標注強調
+    setTimeout(()=>{
+        ['f-A-lbl','f-eq-lbl','f-b-lbl','f-x-lbl','f-frac-lbl'].forEach(id=>{
+            const e=document.getElementById(id); if(e) e.classList.add('annot-emph');
+        });
+    },2600);
+
+    // 結語和重新探索（放到底部按鈕列，跟上一步並排）
+    setTimeout(()=>{
+        const ending=document.getElementById('formula-ending');
+        if(ending){ ending.textContent='這就是我們利用嵌板來幫助找出面積公式的方法！'; ending.style.opacity='1'; }
+        showNext('重新回到 <span class="pill-inline">①</span> 感官探索',()=>setPhase(1));
+    },3400);
+}
+
+
+function restoreDerivationIntro(){
+    p3phase=3; p3step=0; p3introDone=false; p3introStep=5;
+    renderDerivationStep(5);
+}
+
+function renderDerivationStep(step){
+    p3phase=3; p3step=0; p3introDone=false; p3introStep=step;
+    hideNext();
+    clearVisualState();
+    showTriLabelState();
+    updateProgress();
+    const states={
+        1:{right:'長方形的面積',sub:'',subOn:false,base:true,width:true,widthFrac:false,baseLine:false,widthLine:false,baseGlow:false,widthGlow:false,btn:'繼續 →'},
+        2:{right:'長 × 寬',sub:'長方形的面積',subOn:true,base:true,width:true,widthFrac:false,baseLine:false,widthLine:false,baseGlow:false,widthGlow:false,btn:'繼續 →'},
+        3:{right:'<span style="color:#fe8081;font-family:Georgia,serif;font-style:italic;">b</span> × 寬',sub:'長，就是 <span style="color:#fe8081;font-family:Georgia,serif;font-style:italic;font-weight:bold;">b</span>（亮起的黃線）',subOn:true,base:true,width:true,widthFrac:false,baseLine:true,widthLine:false,baseGlow:true,widthGlow:false,btn:'繼續 →'},
+        4:{right:'<span style="color:#fe8081;font-family:Georgia,serif;font-style:italic;">b</span> × <span style="color:#fe8081;font-family:jf-openhuninn,Huninn,sans-serif;font-style:normal;"><span style="font-family:Georgia,serif;font-style:italic;">h</span>的一半</span>',sub:'寬，是「<span style="font-family:jf-openhuninn,Huninn,sans-serif;"><span style="font-family:Georgia,serif;font-style:italic;color:#4aabc4;">h</span><span style="color:#4aabc4;">的一半</span></span>」（亮起的黃線）',subOn:true,base:true,width:true,widthFrac:false,baseLine:false,widthLine:true,baseGlow:false,widthGlow:true,btn:'繼續 →'},
+        5:{right:'<span style="color:#fe8081;font-family:Georgia,serif;font-style:italic;">b</span><span style="color:#fe8081;"> × </span><span style="display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;color:#fe8081;font-family:Georgia,serif;font-style:italic;line-height:1.1;font-size:0.9em;"><span style="border-bottom:2px solid #fe8081;padding:0 2px;"><span style="font-size:1.1em;">h</span></span><span>2</span></span>',sub:'<span style="display:inline-flex;align-items:baseline;padding-left:3.5em;font-family:jf-openhuninn,Huninn,sans-serif;color:#9ca3af;"><span style="font-family:Georgia,serif;font-style:italic;">h</span>的一半</span>',subOn:true,base:true,width:true,widthFrac:true,baseLine:false,widthLine:true,baseGlow:false,widthGlow:true,btn:'來看看完整的公式 →'}
+    };
+    const s=states[step]||states[1];
+    setP3MeasureState(s);
+    document.getElementById('guidance-panel').innerHTML=`
+    <div class="fade-up" style="padding:10px 0 8px;display:flex;flex-direction:column;gap:8px;">
+      <div style="display:flex;align-items:baseline;width:100%;
+                  font-family:jf-openhuninn,Huninn,sans-serif;font-weight:bold;color:#4a3000;
+                  font-size:clamp(18px,2.2vw,26px);line-height:1.6;">
+        <div style="flex:1;text-align:right;padding-right:4px;">
+          <span>三角形的面積</span>
+        </div>
+        <span style="flex-shrink:0;"> ＝ </span>
+        <div style="flex:1;text-align:left;padding-left:4px;">
+          <div style="display:flex;flex-direction:column;align-items:flex-start;">
+            <span id="deriv-right" style="display:block;white-space:nowrap;">${s.right}</span>
+            <div id="deriv-sub-row" style="height:1.4em;opacity:${s.subOn?'1':'0'};">
+              <span id="deriv-sub" style="font-size:clamp(13px,1.4vw,16px);color:#9ca3af;font-weight:normal;line-height:1.3;white-space:nowrap;font-family:jf-openhuninn,Huninn,sans-serif;display:inline-flex;align-items:baseline;">${s.sub}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button class="disc-btn" id="deriv-next-btn" style="margin-top:4px;width:100%;text-align:center;" onclick="nextDerivationStep()">${s.btn}</button>
+    </div>`;
+    refreshBackBtn();
+}
+
+
+
+function restoreP3Phase1(){
+    p3phase=1; p3step=0; p3introDone=false;
+    hideNext();
+    clearVisualState();
+    movePieceTo('Tri_Left',350,300,0,0); movePieceTo('Tri_Right',450,300,0,100); movePieceTo('Trapezoid',400,500,0,200);
+    showTriLabelState();
+    updateProgress(); refreshBackBtn();
+    setTimeout(()=>{
+        document.getElementById('guidance-panel').innerHTML=`
+        <div class="fade-up">
+          <p class="q-gray">三角形的底（b）和高（h），都已經標示出來了。</p>
+          <p class="q-blue">接下來，讓我們把這個三角形，轉換成長方形。</p>
+          <button class="disc-btn" style="margin-top:8px;width:100%;text-align:left;" onclick="goToP3Phase2()">把三角形轉換成長方形 →</button>
+        </div>`;
+    },550);
+}
+
+function restoreP3Phase2(){
+    p3phase=2; p3step=0; p3introDone=false;
+    hideNext();
+    clearVisualState();
+    movePieceTo('Tri_Left',850,500,180,0); movePieceTo('Trapezoid',1000,500,0,100); movePieceTo('Tri_Right',1150,500,180,200);
+    showTriLabelState();
+    updateProgress(); refreshBackBtn();
+    setTimeout(()=>{
+        document.getElementById('guidance-panel').innerHTML=`
+        <div class="fade-up">
+          <p class="q-blue">長方形的面積，我們知道怎麼算——<span style="color:#fe8081;">長 × 寬</span>。</p>
+          <p class="q-gray">長方形的<span style="color:#4aabc4;font-weight:bold;">長</span>，正好就是三角形的<span style="color:#fe8081;">底（b）</span>。</p>
+          <p class="q-gray">長方形的<span style="color:#4aabc4;font-weight:bold;">寬</span>，正好是三角形<span style="color:#fe8081;">高（h）的一半</span>。</p>
+          <p class="q-gray">這些，已經足夠讓我們推導出<span style="color:#4aabc4;">三角形的面積公式</span>了。</p>
+          <button class="disc-btn" style="width:100%;text-align:left;" onclick="renderDerivationIntro()">開始推導公式 →</button>
+        </div>`;
+        document.getElementById('sv-p3-base').style.display='';
+        document.getElementById('sv-p2-height').style.display='';
+        document.getElementById('sv-p3-width').style.display='';
+        setP3MeasureState({base:true,width:true,widthFrac:false});
+    },550);
+}
+
+function getSnapDist(p){
+    if(!p||!SNAPS[p.type]) return Infinity;
+    let m=Infinity;
+    for(const s of SNAPS[p.type]){ const d=Math.sqrt((p.x-s.x)**2+(p.y-s.y)**2); if(d<m) m=d; }
+    return m;
+}
+
+/* ─── 嵌板邏輯 ─── */
+const INIT=[{id:'Tri_Left',type:'triL',color:'#e64a38',sx:350,sy:300,sr:0},{id:'Tri_Right',type:'triR',color:'#e64a38',sx:450,sy:300,sr:0},{id:'Trapezoid',type:'trap',color:'#e64a38',sx:400,sy:500,sr:0}];
+const HDL={triL:{x:15,y:30},triR:{x:-15,y:30},trap:{x:0,y:20}};
+const SNAPS={triL:[{x:350,y:300,r:0},{x:850,y:500,r:180},{x:1150,y:500,r:0}],triR:[{x:450,y:300,r:0},{x:1150,y:500,r:180},{x:850,y:500,r:0}],trap:[{x:400,y:500,r:0},{x:1000,y:500,r:0},{x:1000,y:500,r:180}]};
+let pieces=[];
+const canvas=document.getElementById('canvas'),pLayer=document.getElementById('pieces-layer');
+const rotUI=document.getElementById('rotate-ui-container'),rotOffset=document.getElementById('rotate-ui-offset'),rotAnim=document.getElementById('rotate-ui-anim');
+
+function initGame(){pieces=INIT.map(p=>({...p,x:p.sx,y:p.sy,rot:p.sr}));hideRotUI();renderPieces();}
+function assembleRect(){pieces=INIT.map(p=>({...p,x:p.sx,y:p.sy,rot:p.sr}));const pos={Tri_Left:{x:850,y:500,rot:180},Tri_Right:{x:1150,y:500,rot:180},Trapezoid:{x:1000,y:500,rot:0}};pieces.forEach(p=>{if(pos[p.id])Object.assign(p,pos[p.id]);});hideRotUI();renderPieces();}
+function renderPieces(){pLayer.innerHTML='';pieces.forEach(p=>{const g=document.createElementNS('http://www.w3.org/2000/svg','g');g.setAttribute('id',p.id);g.setAttribute('class','draggable animating');g.setAttribute('data-id',p.id);const dot='#991b1b';if(p.type==='triL')g.innerHTML=`<polygon points="50,-100 -50,100 50,100" fill="${p.color}" filter="url(#plate-3d)"/><circle cx="${HDL.triL.x}" cy="${HDL.triL.y}" r="4" fill="${dot}"/>`;if(p.type==='triR')g.innerHTML=`<polygon points="-50,-100 -50,100 50,100" fill="${p.color}" filter="url(#plate-3d)"/><circle cx="${HDL.triR.x}" cy="${HDL.triR.y}" r="4" fill="${dot}"/>`;if(p.type==='trap')g.innerHTML=`<polygon points="-100,-100 100,-100 200,100 -200,100" fill="${p.color}" filter="url(#plate-3d)"/><circle cx="${HDL.trap.x}" cy="${HDL.trap.y}" r="4" fill="${dot}"/>`;pLayer.appendChild(g);applyTransform(p,false);});}
+function applyTransform(p,a){const el=document.getElementById(p.id);if(!el)return;a?el.classList.add('animating'):el.classList.remove('animating');el.setAttribute('transform',`translate(${p.x},${p.y}) rotate(${p.rot})`);}
+function showRotUI(p){rotOffset.setAttribute('transform',`translate(${HDL[p.type].x},${HDL[p.type].y})`);rotUI.style.display='';rotAnim.classList.remove('pop-in');void rotAnim.offsetWidth;rotAnim.classList.add('pop-in');moveRotUI(p);}
+function hideRotUI(){rotUI.style.display='none';rotHP=null;}
+function moveRotUI(p){rotUI.setAttribute('transform',`translate(${p.x},${p.y}) rotate(${p.rot})`);}
+
+let actP=null,startPtr={x:0,y:0},startCli={x:0,y:0},startPos={x:0,y:0},moved=false,lpTimer=null,lpTriggered=false,rotating=false,rotHP=null,prevAngle=0,rotated=false;
+function svgXY(cx,cy){const r=canvas.getBoundingClientRect();return{x:(cx-r.left)*1450/r.width,y:(cy-r.top)*800/r.height};}
+function cli(e){if(e.touches?.length)return{x:e.touches[0].clientX,y:e.touches[0].clientY};if(e.changedTouches?.length)return{x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY};return{x:e.clientX,y:e.clientY};}
+canvas.addEventListener('pointerdown',e=>{if(e.target.closest('#rotate-ui-container')){e.preventDefault();canvas.setPointerCapture(e.pointerId);rotating=true;rotated=false;actP=rotHP;const c=cli(e);startCli={...c};const sv=svgXY(c.x,c.y);prevAngle=Math.atan2(sv.y-actP.y,sv.x-actP.x)*180/Math.PI;return;}const el=e.target.closest('.draggable');if(!el){hideRotUI();return;}e.preventDefault();canvas.setPointerCapture(e.pointerId);actP=pieces.find(p=>p.id===el.getAttribute('data-id'));if(!actP)return;if(rotHP!==actP)hideRotUI();el.classList.remove('animating');el.classList.add('dragging');pLayer.appendChild(el);const c=cli(e);startCli={...c};startPtr=svgXY(c.x,c.y);startPos={x:actP.x,y:actP.y};moved=false;lpTriggered=false;lpTimer=setTimeout(()=>{if(moved)return;lpTriggered=true;rotating=true;rotHP=actP;prevAngle=Math.atan2(svgXY(startCli.x,startCli.y).y-actP.y,svgXY(startCli.x,startCli.y).x-actP.x)*180/Math.PI;showRotUI(actP);if(navigator.vibrate)navigator.vibrate(50);},500);});
+canvas.addEventListener('pointermove',e=>{const c=cli(e);const dx=c.x-startCli.x,dy=c.y-startCli.y;if(rotating&&actP){e.preventDefault();if(Math.abs(dx)>5||Math.abs(dy)>5)rotated=true;const sv=svgXY(c.x,c.y);const d2=Math.sqrt((sv.x-actP.x)**2+(sv.y-actP.y)**2);if(d2>5){const ca=Math.atan2(sv.y-actP.y,sv.x-actP.x)*180/Math.PI;let diff=ca-prevAngle;if(diff>180)diff-=360;else if(diff<-180)diff+=360;actP.rot+=diff;prevAngle=ca;applyTransform(actP,false);moveRotUI(actP);}return;}if(!actP)return;e.preventDefault();if(!moved&&(Math.abs(dx)>10||Math.abs(dy)>10)){moved=true;if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}hideRotUI();}if(moved&&!lpTriggered){const sv=svgXY(c.x,c.y);actP.x=startPos.x+(sv.x-startPtr.x);actP.y=startPos.y+(sv.y-startPtr.y);applyTransform(actP,false);const _sg=document.getElementById('sv-snap-glow');if(_sg){const _d=getSnapDist(actP);if(_d<25){_sg.style.opacity='1';_sg.setAttribute('stroke-width','10');}else if(_d<40){_sg.style.opacity='0.6';_sg.setAttribute('stroke-width','7');}else{_sg.style.opacity='0';_sg.setAttribute('stroke-width','7');}}}});
+canvas.addEventListener('pointerup',e=>{if(lpTimer){clearTimeout(lpTimer);lpTimer=null;}if(rotating){rotating=false;canvas.releasePointerCapture(e.pointerId);if(!rotated&&!lpTriggered)hideRotUI();else{snap(actP);applyTransform(actP,true);moveRotUI(actP);}actP=null;return;}if(!actP)return;canvas.releasePointerCapture(e.pointerId);const el=document.getElementById(actP.id);if(el)el.classList.remove('dragging');if(!moved&&!lpTriggered){if(rotHP===actP)hideRotUI();else{actP.rot+=90;snap(actP);applyTransform(actP,true);}}else if(moved){snap(actP);applyTransform(actP,true);}const _sg2=document.getElementById('sv-snap-glow');if(_sg2){_sg2.style.opacity='0';_sg2.setAttribute('stroke-width','7');}actP=null;});
+function snap(p){for(const pt of(SNAPS[p.type]||[])){const dist=Math.sqrt((p.x-pt.x)**2+(p.y-pt.y)**2);if(dist<60){const nr=((p.rot%360)+360)%360;let ad=Math.abs(nr-pt.r);if(ad>180)ad=360-ad;if(ad<30){const occ=pieces.some(q=>q.id!==p.id&&Math.abs(q.x-pt.x)<5&&Math.abs(q.y-pt.y)<5&&((q.rot%360)+360)%360===pt.r);let conflict=false;if(pt.x>=800&&pt.x<=1200&&pt.y>=400&&pt.y<=600){const isA=(p.type==='trap'&&pt.r===0)||(p.type==='triL'&&pt.x===850&&pt.r===180)||(p.type==='triR'&&pt.x===1150&&pt.r===180);const isB=(p.type==='trap'&&pt.r===180)||(p.type==='triR'&&pt.x===850&&pt.r===0)||(p.type==='triL'&&pt.x===1150&&pt.r===0);const hasA=pieces.some(q=>q.id!==p.id&&q.x>=800&&q.x<=1200&&q.y>=400&&q.y<=600&&((q.type==='trap'&&((q.rot%360)+360)%360===0)||(q.type==='triL'&&q.x===850&&((q.rot%360)+360)%360===180)||(q.type==='triR'&&q.x===1150&&((q.rot%360)+360)%360===180)));const hasB=pieces.some(q=>q.id!==p.id&&q.x>=800&&q.x<=1200&&q.y>=400&&q.y<=600&&((q.type==='trap'&&((q.rot%360)+360)%360===180)||(q.type==='triR'&&q.x===850&&((q.rot%360)+360)%360===0)||(q.type==='triL'&&q.x===1150&&((q.rot%360)+360)%360===0)));if((isA&&hasB)||(isB&&hasA))conflict=true;}if(!occ&&!conflict){p.x=pt.x;p.y=pt.y;let tr=pt.r;while(tr-p.rot>180)tr-=360;while(p.rot-tr>180)tr+=360;p.rot=tr;break;}}}}checkDone();}
+function checkDone(){if(phase!==1||p1sub!==1)return;if(pieces.every(p=>p.x>=800&&p.x<=1200&&p.y===500))onAssembled();}
+
+setPhase(1);
+</script>
+</body>
+</html>
