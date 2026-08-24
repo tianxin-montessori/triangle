@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>發現三角形的面積公式</title>
 <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
@@ -127,7 +127,7 @@
 
 <div id="app-view">
     <button id="float-back" onclick="showMenu()">← 返回選單</button>
-    <iframe id="app-frame"></iframe>
+    <iframe id="app-frame" title="三角形面積探索教具操作畫面"></iframe>
 </div>
 
 <script>
@@ -155,9 +155,6 @@ function showMenu(){
     document.getElementById('app-frame').srcdoc = '';
 }
 
-window.addEventListener('message', function(e){
-    if(e.data === 'backToMenu') showMenu();
-});
 </script>
 </body>
 </html>
